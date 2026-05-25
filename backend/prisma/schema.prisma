@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+enum WorkspaceRole{
+  OWNER
+  ADMIN 
+  MEMBER
+}
+
+enum Priority{
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User{
+  id        String  @id @default(cuid())
+  email     String  @unique
+  name      String
+  password  String
+  avaratUrl String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  WorkspaceMembership WorkspaceMember[]
+  assignedCards     Card[]    @relation("CardAssignee")
+  messages          Message[]
+  createdCards      Card[]    @relation("cardCreator")
+}
+
+model Workspace{
+  id          String  @id @default(cuid())
+  name        String
+  slug        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members   WorkspaceMember[]
+  board     Board[]
+  messages  Message[]
+}
+
+model WorkspaceMember{
+  id        String        @id @default(cuid())
+  role      WorkspaceRole @default(MEMBER)
+  joinedAt  DateTime      @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+
+  userId  String
+  user  User  @relation(fields:[userId],references:[id],onDelete:Cascade)
+
+  @@unique([workspaceId,userId])
+}
+
+model Board {
+  id          String   @id @default(cuid())
+  name        String
+  position    Int      @default(0)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  columns Column[]
+}
+
+model Column{
+  id        String @id @default(cuid())
+  name      String
+  position  Int
+
+  boardId String
+  board   Board @relation(fields:[boardId],references:[id],onDelete:Cascade)
+
+  cards Card[]  
+}
+
+model Card{
+  id          String    @id @default(cuid())
+  title       String    
+  description String?
+  position    Int
+  priority    Priority  @default(MEDIUM)
+  dueDate     DateTime?
+
+  columnId  String
+  column  Column  @relation(fields:[columnId],references:[id],onDelete:Cascade)
+
+  assigneeId  String?
+  assignee  User? @relation("CardAssignee",fields:[assigneeId],references:[id])
+
+  creatorId String
+  creator User @relation("cardCreator",fields:[creatorId],references:[id])
+}
+
+model Message{
+  id        String    @id @default(cuid())
+  content   String
+  createdAt DateTime  @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+
+  userId  String
+  user  User  @relation(fields:[userId],references:[id],onDelete:Cascade)
+}
