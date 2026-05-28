@@ -5,7 +5,7 @@ const api = axios.create({
     headers: { 'Content-Type': 'application/json' }
 })
 
-// request interceptoro: attach JWT token  from loacalstorage to every request
+// request interceptor: attach JWT token  from loacalstorage to every request
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
         const token = localStorage.getItem('token')
@@ -15,3 +15,18 @@ api.interceptors.request.use((config) => {
     }
     return config
 })
+
+// response interpretor : redirct to login on 401
+
+api.interceptors.response.use(
+    (response)=>response,
+    (error)=>{
+        if (error.response?.status === 401 && typeof window!=='undefined'){
+            localStorage.removeItem('token')
+            window.location.href= '/login'
+        }
+        return Promise.reject(error)
+    }
+)
+export default api
+
