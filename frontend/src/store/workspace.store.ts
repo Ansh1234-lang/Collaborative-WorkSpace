@@ -8,7 +8,7 @@ export interface Card {
     id: string
     title: string
     description?: string
-    priority: 'LOW' | 'High' | 'URGENT'
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
     position: number
     columnId: string
     dueDate?: string

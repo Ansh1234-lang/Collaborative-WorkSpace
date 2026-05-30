@@ -17,7 +17,7 @@ import { Board,Card } from '@/src/store/workspace.store'
 import { useWorkspaceStore } from '@/src/store/workspace.store' 
 import { getSocket } from '@/src/lib/socket' 
 import { KanbanColumn } from './kanbanColumn' 
-import { CardItem } from './CardItem' 
+// import { cardItem } from 
 import api from '@/src/lib/api' 
 
 interface KanbanBoardProps {
