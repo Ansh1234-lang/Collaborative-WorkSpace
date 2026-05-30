@@ -23,7 +23,7 @@ interface AuthState {
     initialize: () => Promise<void>
 }
 
-export const userAuthStore = create<AuthState>()(
+export const useAuthStore = create<AuthState>()(
     // persisit middleware saves state to localstorage automatically
     persist(
         (set, get) => ({
