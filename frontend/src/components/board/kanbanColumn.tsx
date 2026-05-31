@@ -5,7 +5,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Column } from '@/src/store/workspace.store' 
 import { useWorkspaceStore } from '@/src/store/workspace.store' 
-import { CardItem } from './CardItem' 
+// import { CardItem } from './CardItem' 
 import api from '@/src/lib/api'
 
 interface KanbanColumnProps {

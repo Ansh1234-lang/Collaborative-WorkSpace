@@ -7,11 +7,6 @@ import { useAuthStore } from '@/src/store/auth.store'
 import { useSocket } from '@/src/hooks/useSocket'
 import { KanbanBoard } from '@/src/components/board/kanbanBoard'
 import { ChatPanel } from '@/src/components/chat/chatPanel'
-// import { useWorkspaceStore } from '@/store/workspace.store'
-// import { useAuthStore } from '@/store/auth.store'
-// import { useSocket } from '@/hooks/useSocket'
-// import { KanbanBoard } from '@/components/board/KanbanBoard'
-// import { ChatPanel } from '@/components/chat/ChatPanel'
 
 export default function WorkspacePage() {
   const params = useParams()
