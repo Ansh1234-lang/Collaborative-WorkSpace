@@ -1,177 +1,206 @@
-import { Server, Socket } from "socket.io";
+import { Server, Socket } from 'socket.io'
 import jwt from 'jsonwebtoken'
-import { prisma } from "./prisma";
-import { includes } from "zod";
-import { userInfo } from "node:os";
+import { prisma } from './prisma'
+import { Priority } from '@prisma/client'
 
-
-// types
-
-interface AuthenticateSocket extends Socket {
-    userId?: string
-    userName?: string
+interface AuthenticatedSocket extends Socket {
+  userId?: string
+  userName?: string
 }
 
-interface JwtPayLoad {
-    UserId: string
-    email: string
+interface JwtPayload {
+  userId: string
+  email: string
 }
 
-// ─── Auth middleware for Socket.IO ────────────────────────
-// Every socket connection must send a valid JWT.
-// This runs BEFORE any event handlers.
-
-function socketAuthMiddleware(socket: AuthenticateSocket, next: (err?: Error) => void) {
-    const token = socket.handshake.auth?.token
-
-    if (!token) {
-        return next(new Error('Authentication token missing'))
-    }
-
-    try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayLoad
-        socket.userId = payload.UserId
-        next()
-    } catch {
-        next(new Error('Invalid tokrn'))
-    }
+function socketAuthMiddleware(socket: AuthenticatedSocket, next: (err?: Error) => void) {
+  const token = socket.handshake.auth?.token
+  if (!token) return next(new Error('Authentication token missing'))
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload
+    socket.userId = payload.userId
+    next()
+  } catch {
+    next(new Error('Invalid token'))
+  }
 }
 
+// ─── Shared reorder helper ────────────────────────────────
+// Accepts only string IDs — avoids the splice-stub type error
+// that occurs when you splice a fake object into a Prisma result array.
 
-// main Socket Handkler
+async function reorderCards(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  cardId: string,
+  sourceColumnId: string,
+  destColumnId: string,
+  newPosition: number
+) {
+  const sameColumn = sourceColumnId === destColumnId
+
+  if (sameColumn) {
+    const cards = await tx.card.findMany({
+      where: { columnId: sourceColumnId, id: { not: cardId } },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    })
+    const ids = cards.map((c) => c.id)
+    ids.splice(newPosition, 0, cardId)
+    await Promise.all(
+      ids.map((id, index) =>
+        tx.card.update({ where: { id }, data: { position: index } })
+      )
+    )
+  } else {
+    // Close gap in source column
+    const sourceCards = await tx.card.findMany({
+      where: { columnId: sourceColumnId, id: { not: cardId } },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    })
+    await Promise.all(
+      sourceCards.map(({ id }, index) =>
+        tx.card.update({ where: { id }, data: { position: index } })
+      )
+    )
+
+    // Move card to destination column
+    await tx.card.update({
+      where: { id: cardId },
+      data: { columnId: destColumnId },
+    })
+
+    // Reorder destination column
+    const destCards = await tx.card.findMany({
+      where: { columnId: destColumnId, id: { not: cardId } },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    })
+    const destIds = destCards.map((c) => c.id)
+    destIds.splice(newPosition, 0, cardId)
+    await Promise.all(
+      destIds.map((id, index) =>
+        tx.card.update({ where: { id }, data: { position: index } })
+      )
+    )
+  }
+}
 
 export function registerSocketHandlers(io: Server) {
-    io.use(socketAuthMiddleware)
+  io.use(socketAuthMiddleware)
 
-    io.on('connection', async (socket: AuthenticateSocket) => {
-        console.log(`Socket Connected : ${socket.id} | ${socket.userId}`)
+  io.on('connection', async (socket: AuthenticatedSocket) => {
+    console.log(`Socket connected: ${socket.id} | User: ${socket.userId}`)
 
-        // ── Room management ────────────────────────────────────
-        // Rooms = workspaces. A client "joins a room" when they
-        // open a workspace. Socket.IO automatically routes events
-        // only to sockets in the same room.
-        socket.on('workspace:join', async (worksapaceId: string) => {
-            // verify th euser is actually a member before joining
-            const membership = await prisma.workspaceMember.finfUnique({
-                where: {
-                    worksapaceId_userId: {
-                        worksapaceId,
-                        userId: socket.userId!,
+    socket.on('workspace:join', async (workspaceId: string) => {
+      const membership = await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: { workspaceId, userId: socket.userId! },
+        },
+        include: { user: { select: { name: true } } },
+      })
 
-                    },
-                },
-                include: { user: { select: { name: true } } },
-            })
+      if (!membership) {
+        socket.emit('error', { message: 'Not a member of this workspace' })
+        return
+      }
 
-            if (!membership) {
-                socket.emit('error', { message: 'not a member of this workspace' })
-                return
-            }
-            socket.join(worksapaceId)
-            socket.userName = membership.user.name
-
-            // tell everyone in the room this user came online
-            socket.to(worksapaceId).emit('workspace:user_joined', {
-                userId: socket.userId,
-                userName: membership.user.name,
-            })
-            console.log(`User ${membership.user.name} joined workspace ${worksapaceId}`)
-        })
-        socket.on('workspace:leave', (workspaceId: string) => {
-            socket.leave(workspaceId)
-            socket.to(workspaceId).emit('workspace:user_left', {
-                userId: socket.userId,
-                userName: socket.userName,
-            })
-        })
-
-        // ── Chat messages ──────────────────────────────────────
-        // When a message arrives: save to DB first, THEN broadcast.
-        // This ensures chat history persists and all clients get
-        // the DB-assigned ID and timestamp.
-
-        socket.on('message:send', async (data: {
-            workspaceId: string
-            content: string
-        }) => {
-            try {
-                const message = await prisma.message.create({
-                    data: {
-                        content: data.content,
-                        workspaceId: data.workspaceId,
-                        userId: socket.userId
-                    },
-                    include: {
-                        user: { select: { id: true, name: true, avatarUrl: true } }
-                    }
-                })
-                io.to(data.workspaceId).emit('message', message)
-            } catch (err) {
-                socket.emit('error', { message: 'Failed to send message' })
-            }
-        })
-
-        // ── Kanban card events ─────────────────────────────────
-        // When a card moves, update DB then broadcast to room.
-        // Other clients apply the update to their local state.
-
-        socket.on('card:move', async (data: {
-            workspaceId: string
-            cardId: string
-            newColumnId: string
-            newPosition: number
-        }) => {
-            try {
-                const card = await prisma.card.update({
-                    where: { id: data.cardId },
-                    data: {
-                        columnId: data.newColumnId,
-                        position: data.newPosition,
-                    },
-                    include: { assignee: { select: { id: true, name: true } } },
-                })
-                // broardcast to everyone Except the sender 
-                socket.to(data.workspaceId).emit('card:moved', card)
-            } catch (err) {
-                socket.emit('error', { message: 'failed to move card' })
-            }
-        })
-
-        socket.on('card:update', async (data: {
-            workspaceId: string
-            cardId: string
-            updates: { title?: string; description?: string; priority?: string }
-        }) => {
-            try {
-                const card = await prisma.card.update({
-                    where: { id: data.cardId },
-                    data: data.updates,
-                })
-                socket.to(data.workspaceId).emit('card:updated', card)
-            } catch (err) {
-                socket.emit('error', { message: 'failedto update card' })
-            }
-        })
-
-        // ── Typing indicators ──────────────────────────────────
-        // Pure real-time — no DB needed. Just relay to the room.
-
-        socket.on('typind:start', (workspaceId: string) => {
-            socket.to(workspaceId).emit('typing:user_started', {
-                userId: socket.userId,
-                userName: socket.userName
-            })
-        })
-
-        socket.on('typing:stop', (workspaseId: string) => {
-            socket.to(workspaseId).emit('typing:user_stopped', {
-                userId: socket.userId,
-            })
-        })
-
-        // disconnect
-        socket.on('disconnect', () => {
-            console.log(`socket disconnected : ${socket.id}`)
-        })
+      socket.join(workspaceId)
+      socket.userName = membership.user.name
+      socket.to(workspaceId).emit('workspace:user_joined', {
+        userId: socket.userId,
+        userName: membership.user.name,
+      })
+      console.log(`User ${membership.user.name} joined workspace ${workspaceId}`)
     })
+
+    socket.on('workspace:leave', (workspaceId: string) => {
+      socket.leave(workspaceId)
+      socket.to(workspaceId).emit('workspace:user_left', {
+        userId: socket.userId,
+        userName: socket.userName,
+      })
+    })
+
+    socket.on('message:send', async (data: { workspaceId: string; content: string }) => {
+      try {
+        const message = await prisma.message.create({
+          data: {
+            content: data.content,
+            workspaceId: data.workspaceId,
+            userId: socket.userId!,
+          },
+          include: {
+            user: { select: { id: true, name: true, avatarUrl: true } },
+          },
+        })
+        io.to(data.workspaceId).emit('message:new', message)
+      } catch {
+        socket.emit('error', { message: 'Failed to send message' })
+      }
+    })
+
+    socket.on('card:move', async (data: {
+      workspaceId: string
+      cardId: string
+      newColumnId: string
+      newPosition: number
+    }) => {
+      try {
+        const currentCard = await prisma.card.findUnique({
+          where: { id: data.cardId },
+          select: { columnId: true },
+        })
+        if (!currentCard) return
+
+        await prisma.$transaction((tx) =>
+          reorderCards(tx, data.cardId, currentCard.columnId, data.newColumnId, data.newPosition)
+        )
+
+        const updatedCard = await prisma.card.findUnique({
+          where: { id: data.cardId },
+          include: { assignee: { select: { id: true, name: true } } },
+        })
+
+        socket.to(data.workspaceId).emit('card:moved', updatedCard)
+      } catch {
+        socket.emit('error', { message: 'Failed to move card' })
+      }
+    })
+
+    socket.on('card:update', async (data: {
+      workspaceId: string
+      cardId: string
+      // priority must be typed as Priority enum, not plain string,
+      // so Prisma's update() accepts it without a type error
+      updates: { title?: string; description?: string; priority?: Priority }
+    }) => {
+      try {
+        const card = await prisma.card.update({
+          where: { id: data.cardId },
+          data: data.updates,
+        })
+        socket.to(data.workspaceId).emit('card:updated', card)
+      } catch {
+        socket.emit('error', { message: 'Failed to update card' })
+      }
+    })
+
+    socket.on('typing:start', (workspaceId: string) => {
+      socket.to(workspaceId).emit('typing:user_started', {
+        userId: socket.userId,
+        userName: socket.userName,
+      })
+    })
+
+    socket.on('typing:stop', (workspaceId: string) => {
+      socket.to(workspaceId).emit('typing:user_stopped', {
+        userId: socket.userId,
+      })
+    })
+
+    socket.on('disconnect', () => {
+      console.log(`Socket disconnected: ${socket.id}`)
+    })
+  })
 }

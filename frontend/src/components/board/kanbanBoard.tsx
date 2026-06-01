@@ -17,7 +17,7 @@ import { Board,Card } from '@/src/store/workspace.store'
 import { useWorkspaceStore } from '@/src/store/workspace.store' 
 import { getSocket } from '@/src/lib/socket' 
 import { KanbanColumn } from './kanbanColumn' 
-// import { cardItem } from 
+import { CardItem } from './card'
 import api from '@/src/lib/api' 
 
 interface KanbanBoardProps {
@@ -71,9 +71,10 @@ export function KanbanBoard({ boards, workspaceId }: KanbanBoardProps) {
     // 3. Persist to DB via REST (socket handler also does this,
     //    but REST gives us a direct error response if it fails)
     try {
-      await api.patch(`/boards/cards/${card.id}`, {
-        columnId: newColumnId,
-        position: newPosition,
+      console.log({newColumnId,newPosition})
+      await api.patch(`/boards/cards/${card.id}/move`, {
+        newColumnId: newColumnId,
+        newPosition: newPosition,
       })
     } catch (err) {
       console.error('Failed to persist card move', err)

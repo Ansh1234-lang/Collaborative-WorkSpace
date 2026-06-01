@@ -46,7 +46,7 @@ export interface Workspace {
 export interface Message {
     id: string
     content: string
-    crearedAt: string
+    createdAt: string
     user: { id: string; name: string; avatarUrl?: string }
 }
 
