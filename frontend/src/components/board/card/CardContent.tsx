@@ -48,5 +48,6 @@ export default function CardContent({ card }: CardContentProps) {
         </div>
       )}
     </div>
+    
   )
 }

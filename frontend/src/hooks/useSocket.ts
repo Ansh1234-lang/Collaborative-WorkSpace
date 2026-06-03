@@ -37,7 +37,8 @@ export function useSocket(workspaceId: string | null) {
             addMessage(message)
         }
         function onCardMoved(card: any) {
-            moveCard(card.id, card.columnId, card.postion)
+            console.log('cardmoved received',card)
+            moveCard(card.id, card.columnId, card.position)
         }
         function onCardUpdated(card: any) {
             updateCard(card)
