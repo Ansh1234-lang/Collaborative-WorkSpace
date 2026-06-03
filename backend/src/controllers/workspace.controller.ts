@@ -317,7 +317,8 @@ export async function inviteMember(
                     },
                 },
             })
-
+        const io = req.app.get('io')
+        io.to(workspaceId).email('workspace:member_added', member)
         res.status(201).json({ member })
     } catch (err) {
         next(err)

@@ -28,7 +28,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isLoading: false,
-
+// login function
       login: async (email, password) => {
         set({ isLoading: true })
 
@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
           throw error
         }
       },
-
+// register function
       register: async (name, email, password) => {
         set({ isLoading: true })
 
@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthState>()(
           throw error
         }
       },
-
+// logout function
       logout: () => {
         localStorage.removeItem('token')
 

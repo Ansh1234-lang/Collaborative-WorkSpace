@@ -18,7 +18,7 @@ export default function CardModal({
   isOpen,
   onClose,
 }: CardModalProps) {
-  const { updateCard } = useWorkspaceStore()
+  const { updateCard, deleteCard } = useWorkspaceStore()
 
   const [assigneeId, setAssigneeId] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -48,6 +48,19 @@ export default function CardModal({
   }, [card])
 
   if (!isOpen) return null
+  async function handleDelete() {
+    if (!window.confirm('Delete this card')) return
+    try {
+      await api.delete(`/boards/cards/${card.id}`)
+
+      deleteCard(card.id)
+
+      onClose()
+    } catch (err) {
+      console.log('Failed to delete card', err)
+    }
+
+  }
 
   async function handleSave() {
     try {
@@ -60,7 +73,7 @@ export default function CardModal({
           description,
           priority,
           dueDate,
-          assigneeId:assigneeId||null,
+          assigneeId: assigneeId || null,
         }
       )
 
@@ -194,6 +207,11 @@ export default function CardModal({
 
           {/* Footer */}
           <div className="flex justify-end gap-3 pt-4">
+            <button 
+            onClick={handleDelete} 
+            className='rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700'>
+              Delete Card
+            </button>
             <button
               onClick={onClose}
               className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"

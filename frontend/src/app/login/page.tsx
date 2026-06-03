@@ -28,7 +28,7 @@ export default function LoginPage() {
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-          'Login failed'
+        'Login failed'
       )
     }
   }
@@ -76,6 +76,17 @@ export default function LoginPage() {
         >
           {isLoading ? 'Logging in...' : 'Login'}
         </button>
+        <p className="text-center mt-4 text-sm">
+          Don't have an account?
+
+          <button
+            type="button"
+            onClick={() => router.push('/register')}
+            className="ml-2 text-blue-600"
+          >
+            Register
+          </button>
+        </p>
       </form>
     </div>
   )

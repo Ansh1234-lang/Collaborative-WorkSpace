@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import { prisma } from './prisma'
 import { Priority } from '@prisma/client'
+import { array } from 'zod'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -12,6 +13,7 @@ interface JwtPayload {
   userId: string
   email: string
 }
+const onlineUsers = new Map<string,Set<string>>()
 
 function socketAuthMiddleware(socket: AuthenticatedSocket, next: (err?: Error) => void) {
   const token = socket.handshake.auth?.token
@@ -107,6 +109,12 @@ export function registerSocketHandlers(io: Server) {
 
       socket.join(workspaceId)
       socket.userName = membership.user.name
+      if(!onlineUsers.has(workspaceId)){
+        onlineUsers.set(workspaceId,new Set())
+      }
+      onlineUsers.get(workspaceId)!.add(socket.userId!)
+      io.to(workspaceId).emit('workspace:online_users',Array.from(onlineUsers.get(workspaceId)!))
+      
       socket.to(workspaceId).emit('workspace:user_joined', {
         userId: socket.userId,
         userName: membership.user.name,
@@ -116,6 +124,8 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on('workspace:leave', (workspaceId: string) => {
       socket.leave(workspaceId)
+      onlineUsers.get(workspaceId)?.delete(socket.userId!)
+      io.to(workspaceId).emit('workspace:online_users',Array.from(onlineUsers.get(workspaceId)||[]))
       socket.to(workspaceId).emit('workspace:user_left', {
         userId: socket.userId,
         userName: socket.userName,
@@ -199,8 +209,12 @@ export function registerSocketHandlers(io: Server) {
       })
     })
 
-    socket.on('disconnect', () => {
-      console.log(`Socket disconnected: ${socket.id}`)
+    socket.on('disconnect',()=>{
+      for(const[workspaceId,users,]of onlineUsers.entries()){
+        users.delete(socket.userId!)
+        io.to(workspaceId).emit('workspace:online_users',Array.from(users))
+      }
     })
+    console.log(`Socket disconnected: ${socket.id}`)
   })
 }

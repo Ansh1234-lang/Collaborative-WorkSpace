@@ -18,7 +18,7 @@ import { useAuthStore } from "../store/auth.store"
 
 export function useSocket(workspaceId: string | null) {
     const { user } = useAuthStore()
-    const { addMessage, moveCard, updateCard } = useWorkspaceStore()
+    const { addMessage, moveCard, updateCard, addMember,setOnlineUsers } = useWorkspaceStore()
 
     // track current workspaceId in a ref so we can leave the room
     // even if the component re-renders with a different value
@@ -46,12 +46,20 @@ export function useSocket(workspaceId: string | null) {
         function onUserJoined(data: { userId: string; userName: string }) {
             console.log(`${data.userName} joined the workspace`)
         }
+        function onMemberAdded(member:any){
+            addMember(member)
+        }
+        function onOnlineUsers(users:string[]){
+            setOnlineUsers(users)
+        }
 
         // register handler
         socket.on('message:new', onMessage)
         socket.on('card:moved', onCardMoved)
         socket.on('card:updated', onCardUpdated)
         socket.on('workspace:user_joined', onUserJoined)
+        socket.on('workspace:member_added',onMemberAdded)
+        socket.on('workspace:online_users',onOnlineUsers)
 
         // cleanup on unmount or workspaceId change
         return () => {
@@ -62,6 +70,8 @@ export function useSocket(workspaceId: string | null) {
             socket.off('card:moved', onCardMoved)
             socket.off('card:updated', onCardUpdated)
             socket.off('workspace:user_joined', onUserJoined)
+            socket.off('workspace:member_added',onMemberAdded)
+            socket.off('workspace:online_users',onOnlineUsers)
         }
     }, [workspaceId, user])
 }

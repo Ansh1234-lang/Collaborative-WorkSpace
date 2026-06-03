@@ -63,13 +63,19 @@ interface WorkspaceState {
     createWorkspace: (name: string, description?: string) => Promise<Workspace>
 
     // Real-time updates (called from socket event handlers)
+    onlineUsers:string[]
+    setOnlineUsers:(users:string[])=>void
     addMessage: (message: Message) => void
     moveCard: (cardId: string, newColumnId: string, newPosition: number) => void
     updateCard: (card: Partial<Card> & { id: string }) => void
     addCard: (card: Card) => void
+    deleteCard : (cardId:string)=>void
+    inviteMember:(WorkspaceId:string,email:string)=>Promise<void>
+    addMember:(member:WorkspaceMember)=>void
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
+  onlineUsers:[],
   workspaces: [],
   currentWorkspace: null,
   messages: [],
@@ -98,6 +104,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({ workspaces: [...state.workspaces, data.workspace] }))
     return data.workspace
   },
+  
  
   // ── Real-time mutations ─────────────────────────────────
   // These are called by socket event handlers.
@@ -169,5 +176,67 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return { currentWorkspace: { ...state.currentWorkspace, boards } }
     })
   },
+  setOnlineUsers:(users)=>{
+    set({onlineUsers:users})
+  },
+  deleteCard: (cardId) => {
+  set((state) => {
+    if (!state.currentWorkspace) return state
+
+    const boards = state.currentWorkspace.boards.map((board) => ({
+      ...board,
+      columns: board.columns.map((column) => ({
+        ...column,
+        cards: column.cards.filter(
+          (card) => card.id !== cardId
+        ),
+      })),
+    }))
+
+    return {
+      currentWorkspace: {
+        ...state.currentWorkspace,
+        boards,
+      },
+    }
+  })
+},
+inviteMember: async (workspaceId, email) => {
+  const { data } = await api.post(
+    `/workspaces/${workspaceId}/invite`,
+    { email }
+  )
+
+  set((state) => {
+    if (!state.currentWorkspace) return state
+
+    return {
+      currentWorkspace: {
+        ...state.currentWorkspace,
+        members: [
+          ...state.currentWorkspace.members,
+          data.member,
+        ],
+      },
+    }
+  })
+},
+addMember: (member) => {
+  set((state) => {
+    if (!state.currentWorkspace) return state
+    const alreadyExists=state.currentWorkspace.members.some((m)=>m.id === member.id)
+    if(alreadyExists) return state
+    return {
+      currentWorkspace: {
+        ...state.currentWorkspace,
+        members: [
+          ...state.currentWorkspace.members,
+          member,
+        ],
+      },
+    }
+  })
+},
+
 }))
  
