@@ -246,6 +246,12 @@ export async function inviteMember(
     next: NextFunction
 ) {
     try {
+        console.log('Invite Request')
+        console.log('Workspace ID:', req.params.workspaceId)
+        console.log('Body:', req.body)
+        console.log('User:', req.userId)
+
+
         const workspaceId = workspaceIdParamSchema.parse(req.params.workspaceId)
         const { email } = req.body
 
@@ -318,7 +324,7 @@ export async function inviteMember(
                 },
             })
         const io = req.app.get('io')
-        io.to(workspaceId).email('workspace:member_added', member)
+        io.to(workspaceId).emit('workspace:member_added', member)
         res.status(201).json({ member })
     } catch (err) {
         next(err)

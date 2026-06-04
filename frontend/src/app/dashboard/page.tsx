@@ -13,7 +13,10 @@ export default function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
-
+  const handleLogout = async()=> {
+    await logout()
+    router.replace('/login')
+  }
   useEffect(() => {
     fetchWorkspaces()
   }, [])
@@ -40,10 +43,10 @@ export default function DashboardPage() {
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{user?.name}</span>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
           >
-            Sign out
+            Logout          
           </button>
         </div>
       </nav>

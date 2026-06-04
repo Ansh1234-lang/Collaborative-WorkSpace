@@ -15,12 +15,12 @@ export default function WorkspacePage() {
   const params = useParams()
   const workspaceId = params.workspaceId as string
   const router = useRouter()
-
   const [inviteOpen, setInviteOpen] = useState(false)
 
   const { user } = useAuthStore()
 
   const {
+    fetchActivities,
     currentWorkspace,
     onlineUsers,
     fetchWorkspace,
@@ -34,7 +34,7 @@ export default function WorkspacePage() {
       router.push('/login')
       return
     }
-
+    fetchActivities(workspaceId)
     fetchWorkspace(workspaceId)
   }, [workspaceId, user])
 

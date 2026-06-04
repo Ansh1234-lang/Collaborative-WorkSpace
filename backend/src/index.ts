@@ -10,6 +10,8 @@ import { boardRouter } from "./routes/board.routes";
 import { messageRouter } from "./routes/board.routes";
 import { errorHandler } from "./middleware/error.middleware";
 import { registerSocketHandlers } from "./lib/socket";
+import { activityRouter } from "./routes/activity.routes";
+
 
 
 dotenv.config()
@@ -40,6 +42,7 @@ app.use('/api/auth',authRouter)
 app.use('/api/workspaces',workspaceRouter)
 app.use('/api/boards',boardRouter)
 app.use('/api/messages',messageRouter)
+app.use('/api/activities',activityRouter)
 
 // health check - useful when deploying
 app.get('/health',(_res,res)=>{
