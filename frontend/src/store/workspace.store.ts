@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import api from '../lib/api'
-import { promises } from 'dns'
+
+
 
 
 // types
@@ -87,6 +88,8 @@ interface WorkspaceState {
   deleteCard: (cardId: string) => void
   inviteMember: (WorkspaceId: string, email: string) => Promise<void>
   addMember: (member: WorkspaceMember) => void
+  updateWorkspace: (workspaceId: string, data:{name: string, description?: string}) => Promise<void>
+  deleteWorkspace: (workspaceid: string) => Promise<void>
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -270,6 +273,28 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         },
       }
     })
+  },
+  updateWorkspace: async (workspaceId, {name, description}) => {
+    const { data } = await api.patch(
+      `/workspaces/${workspaceId}`,
+      {
+        name,
+        description
+      }
+    )
+    set((state) => ({
+      currentWorkspace: data.workspace,
+      workspaces: state.workspaces.map((ws) =>
+        ws.id === workspaceId ? data.workspace : ws)
+    }))
+  },
+  deleteWorkspace: async (workspaceId) => {
+    await api.delete(`/workspaces/${workspaceId}`)
+
+    set((state) => ({
+      workspaces: state.workspaces.filter((ws) => ws.id !== workspaceId),
+      currentWorkspace: state.currentWorkspace?.id === workspaceId ? null : state.currentWorkspace
+    }))
   },
 
 }))

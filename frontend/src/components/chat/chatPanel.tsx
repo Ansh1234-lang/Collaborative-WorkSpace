@@ -10,34 +10,59 @@ interface ChatPanelProps {
   workspaceId: string
 }
 
+interface TypingUser {
+  userId: string
+  userName: string
+}
+
 export function ChatPanel({ workspaceId }: ChatPanelProps) {
   const { messages } = useWorkspaceStore()
   const { user } = useAuthStore()
+
   const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState<string[]>([])
+  const [isTyping, setIsTyping] = useState<TypingUser[]>([])
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Scroll to bottom on new messages
+  // Auto-scroll on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({
+      behavior: 'smooth',
+    })
   }, [messages])
 
-  // Listen for typing indicators
+  // Listen for typing events
   useEffect(() => {
     const socket = getSocket()
 
-    socket.on('typing:user_started', (data: { userId: string; userName: string }) => {
-      if (data.userId !== user?.id) {
+    socket.on(
+      'typing:user_started',
+      (data: { userId: string; userName: string }) => {
+        if (data.userId === user?.id) return
+
+        setIsTyping((prev) => {
+          const exists = prev.some(
+            (u) => u.userId === data.userId
+          )
+
+          if (exists) return prev
+
+          return [...prev, data]
+        })
+      }
+    )
+
+    socket.on(
+      'typing:user_stopped',
+      (data: { userId: string }) => {
         setIsTyping((prev) =>
-          prev.includes(data.userName) ? prev : [...prev, data.userName]
+          prev.filter(
+            (u) => u.userId !== data.userId
+          )
         )
       }
-    })
-
-    socket.on('typing:user_stopped', (data: { userId: string }) => {
-      setIsTyping((prev) => prev.filter((_, i) => i !== prev.indexOf(data.userId)))
-    })
+    )
 
     return () => {
       socket.off('typing:user_started')
@@ -45,12 +70,22 @@ export function ChatPanel({ workspaceId }: ChatPanelProps) {
     }
   }, [user])
 
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Cleanup timeout
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  function handleInputChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
     setInput(e.target.value)
 
     const socket = getSocket()
 
-    // Emit typing:start and debounce typing:stop
     socket.emit('typing:start', workspaceId)
 
     if (typingTimeoutRef.current) {
@@ -62,20 +97,26 @@ export function ChatPanel({ workspaceId }: ChatPanelProps) {
     }, 1500)
   }
 
-  function sendMessage(e: React.FormEvent) {
+  function sendMessage(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault()
+
     if (!input.trim()) return
 
     const socket = getSocket()
+
     socket.emit('message:send', {
       workspaceId,
       content: input.trim(),
     })
 
     socket.emit('typing:stop', workspaceId)
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
     }
+
     setInput('')
   }
 
@@ -83,14 +124,16 @@ export function ChatPanel({ workspaceId }: ChatPanelProps) {
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 shrink-0">
-        <h2 className="text-sm font-semibold text-gray-800">Team chat</h2>
+        <h2 className="text-sm font-semibold text-gray-800">
+          Team Chat
+        </h2>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
         {messages.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-8">
-            No messages yet. Say hello!
+            No messages yet. Say hello 👋
           </p>
         )}
 
@@ -98,34 +141,66 @@ export function ChatPanel({ workspaceId }: ChatPanelProps) {
           const isOwn = msg.user.id === user?.id
 
           return (
-            <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+            <div
+              key={msg.id}
+              className={`flex flex-col ${
+                isOwn
+                  ? 'items-end'
+                  : 'items-start'
+              }`}
+            >
               {!isOwn && (
-                <span className="text-[10px] text-gray-400 mb-1 ml-1">{msg.user.name}</span>
+                <span className="text-[10px] text-gray-400 mb-1 ml-1">
+                  {msg.user.name}
+                </span>
               )}
+
               <div
-                className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${isOwn
-                  ? 'bg-brand-600 text-white rounded-br-sm'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'
-                  }`}
+                className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${
+                  isOwn
+                    ? 'bg-indigo-600 text-white rounded-br-sm'
+                    : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                }`}
               >
                 {msg.content}
               </div>
-              <span className="text-[10px] text-gray-300 mt-1 px-1">
-                {format(new Date(msg.crearedAt), 'HH:mm')}
+
+              <span className="text-[10px] text-gray-400 mt-1">
+                {format(
+                  new Date(msg.createdAt),
+                  'HH:mm'
+                )}
               </span>
             </div>
           )
         })}
 
-        {/* Typing indicator */}
+        {/* Typing Indicator */}
         {isTyping.length > 0 && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <div className="flex gap-0.5">
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="flex gap-1">
+              <span
+                className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                style={{ animationDelay: '0ms' }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                style={{ animationDelay: '150ms' }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                style={{ animationDelay: '300ms' }}
+              />
             </div>
-            <span>{isTyping.join(', ')} {isTyping.length === 1 ? 'is' : 'are'} typing</span>
+
+            <span>
+              {isTyping
+                .map((u) => u.userName)
+                .join(', ')}
+              {isTyping.length === 1
+                ? ' is typing...'
+                : ' are typing...'}
+            </span>
           </div>
         )}
 
@@ -133,22 +208,25 @@ export function ChatPanel({ workspaceId }: ChatPanelProps) {
       </div>
 
       {/* Input */}
-      <form onSubmit={sendMessage} className="p-3 border-t border-gray-200 shrink-0">
+      <form
+        onSubmit={sendMessage}
+        className="p-3 border-t border-gray-200 shrink-0"
+      >
         <div className="flex gap-2">
           <input
+            type="text"
             value={input}
             onChange={handleInputChange}
-            placeholder="Message..."
-            className="flex-1 text-sm px-3 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all"
+            placeholder="Type a message..."
+            className="flex-1 px-3 py-2 text-sm bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
           />
+
           <button
             type="submit"
             disabled={!input.trim()}
-            className="w-8 h-8 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-colors"
+            className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
+            ➤
           </button>
         </div>
       </form>

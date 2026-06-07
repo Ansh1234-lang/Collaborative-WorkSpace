@@ -11,21 +11,53 @@ import { KanbanBoard } from '@/src/components/board/kanbanBoard'
 import { ChatPanel } from '@/src/components/chat/chatPanel'
 import InviteMemberModal from '@/src/components/workspace/InviteMemberModal'
 
+
 export default function WorkspacePage() {
   const params = useParams()
   const workspaceId = params.workspaceId as string
   const router = useRouter()
   const [inviteOpen, setInviteOpen] = useState(false)
-
   const { user } = useAuthStore()
-
+  const [showEdit, setShowEdit] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const {
     fetchActivities,
     currentWorkspace,
     onlineUsers,
     fetchWorkspace,
     isLoading,
+    deleteWorkspace,
+    updateWorkspace
   } = useWorkspaceStore()
+
+  async function handleDelete() {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this workspace?'
+    )
+
+    if (!confirmed) return
+
+    try {
+      await deleteWorkspace(workspaceId)
+      router.push('/dashboard')
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  async function handleUpdate() {
+    try {
+      await updateWorkspace(workspaceId, {
+        name,
+        description,
+      })
+
+      setShowEdit(false)
+    } catch (error) {
+      console.error(error)
+    }
+  }
 
   useSocket(workspaceId)
 
@@ -37,6 +69,12 @@ export default function WorkspacePage() {
     fetchActivities(workspaceId)
     fetchWorkspace(workspaceId)
   }, [workspaceId, user])
+  useEffect(() => {
+    if (currentWorkspace) {
+      setName(currentWorkspace.name)
+      setDescription(currentWorkspace.description || '')
+    }
+  }, [currentWorkspace])
 
   if (isLoading || !currentWorkspace) {
     return (
@@ -53,6 +91,7 @@ export default function WorkspacePage() {
       <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between shrink-0">
+
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard')}
@@ -63,7 +102,21 @@ export default function WorkspacePage() {
 
             <h1 className="font-semibold text-gray-900">
               {currentWorkspace.name}
-            </h1>
+            </h1><div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowEdit(true)}
+                className="px-3 py-1 text-sm rounded bg-blue-500 text-white"
+              >
+                Edit
+              </button>
+
+              <button
+                onClick={handleDelete}
+                className="px-3 py-1 text-sm rounded bg-red-500 text-white"
+              >
+                Delete
+              </button>
+            </div>
 
             {/* Members */}
             <div className="flex flex-wrap gap-2">
@@ -123,7 +176,50 @@ export default function WorkspacePage() {
             Invite Member
           </button>
         </header>
+        {/* Edit Workspace Modal */}
+        {showEdit && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-lg font-semibold mb-4">
+                Edit Workspace
+              </h2>
 
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Workspace Name"
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Description"
+                  rows={4}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  onClick={() => setShowEdit(false)}
+                  className="px-4 py-2 border rounded-lg"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleUpdate}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Main Layout */}
         <div className="flex flex-1 overflow-hidden">
           {/* Board */}

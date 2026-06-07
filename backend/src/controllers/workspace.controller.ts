@@ -329,4 +329,76 @@ export async function inviteMember(
     } catch (err) {
         next(err)
     }
+
+}
+
+
+// Updated workspace
+export async function updateWorkspace(req:AuthRequest,res:Response,next:NextFunction) { 
+    try{
+        const workspaceId = req.params.workspaceId as string
+        const {name,description}= req.body
+
+        const member = await prisma.workspaceMember.findUnique({
+            where:{
+                workspaceId_userId:{
+                    workspaceId,
+                    userId:req.userId!,
+                }
+            }
+        })
+        if(
+            !member||
+            !['OWNER','ADMIN'].includes(member.role)
+        ){
+            throw new AppError(
+                'Only Woner or Admin can edit Workspace',403
+            )
+        }
+        const workspace = await prisma.workspace.update({
+            where:{
+                id:workspaceId
+            },
+            data:{
+                name,description
+            }
+        })
+        res.json({workspace})
+    }catch(err){
+        next(err)
+    }
+    
+}
+
+// delte workspace
+
+export async function deleteWorkspace(req:AuthRequest,res:Response,next:NextFunction){
+    try{
+        const workspaceId = req.params.workspaceId as string
+
+        const member = await prisma.workspaceMember.findUnique({
+            where:{
+                workspaceId_userId:{
+                    workspaceId,
+                    userId:req.userId!
+                }
+            }
+        })
+
+        if(!member || member.role != 'OWNER'){
+            throw new AppError(
+                'Only workspace owner can delete Workspace',403
+            )
+        }
+        await prisma.workspace.delete({
+            where:{
+                id:workspaceId,
+            }
+        })
+        res.json({
+            message:'Workspace deleted successfully'
+        })
+    }catch(err){
+        next(err)
+    }
 }

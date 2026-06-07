@@ -212,9 +212,13 @@ export function registerSocketHandlers(io: Server) {
     socket.on('disconnect',()=>{
       for(const[workspaceId,users,]of onlineUsers.entries()){
         users.delete(socket.userId!)
-        io.to(workspaceId).emit('workspace:online_users',Array.from(users))
+        io.to(workspaceId).emit(
+          'workspace:online_users',
+          Array.from(users)
+        )
       }
+      console.log(`Socket disconnected: ${socket.id}`)
     })
-    console.log(`Socket disconnected: ${socket.id}`)
+    
   })
 }
