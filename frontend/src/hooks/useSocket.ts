@@ -17,17 +17,20 @@ export function useSocket(workspaceId: string | null) {
     setOnlineUsers,
   } = useWorkspaceStore()
 
-  const token = localStorage.getItem('token')
-  if (token){
-    connectSocket(token)
-  }
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      connectSocket(token);
+    }
+  }, []);
   const currentRoomRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!workspaceId || !user) return
 
     const socket = getSocket()
-    console.log('socke connected',socket.connected)
+    console.log('socke connected', socket.connected)
 
 
     socket.emit('workspace:join', workspaceId)
@@ -83,11 +86,11 @@ export function useSocket(workspaceId: string | null) {
       'workspace:online_users',
       onOnlineUsers
     )
-    socket.on('connect',()=>{
+    socket.on('connect', () => {
       console.log("socketr connected successfully")
     })
-    socket.on('connected_err',(err)=>{
-      console.log('socket error :',err.message )
+    socket.on('connected_err', (err) => {
+      console.log('socket error :', err.message)
     })
 
     return () => {
