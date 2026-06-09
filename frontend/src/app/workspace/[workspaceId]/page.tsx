@@ -9,6 +9,7 @@ import { useSocket } from '@/src/hooks/useSocket'
 
 import { KanbanBoard } from '@/src/components/board/kanbanBoard'
 import { ChatPanel } from '@/src/components/chat/chatPanel'
+import AiChatPanel from '@/src/components/ai/AiChatPanel'
 import InviteMemberModal from '@/src/components/workspace/InviteMemberModal'
 
 
@@ -30,6 +31,7 @@ export default function WorkspacePage() {
     deleteWorkspace,
     updateWorkspace
   } = useWorkspaceStore()
+  const [activePanel, setActivePanel] = useState<'chat' | 'ai'>('chat')
 
   async function handleDelete() {
     const confirmed = window.confirm(
@@ -230,9 +232,37 @@ export default function WorkspacePage() {
             />
           </div>
 
-          {/* Chat */}
-          <div className="w-72 border-l border-gray-200 shrink-0">
-            <ChatPanel workspaceId={workspaceId} />
+          {/* Right Sidebar */}
+          <div className="w-80 border-l border-gray-200 shrink-0 flex flex-col bg-white">
+            <div className="flex gap-2 p-2 border-b border-gray-200">
+              <button
+                onClick={() => setActivePanel('chat')}
+                className={`flex-1 py-2 rounded text-sm ${activePanel === 'chat'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100'
+                  }`}
+              >
+                Team Chat
+              </button>
+
+              <button
+                onClick={() => setActivePanel('ai')}
+                className={`flex-1 py-2 rounded text-sm ${activePanel === 'ai'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100'
+                  }`}
+              >
+                AI Assistant
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              {activePanel === 'chat' ? (
+                <ChatPanel workspaceId={workspaceId} />
+              ) : (
+                <AiChatPanel workspaceId={workspaceId} />
+              )}
+            </div>
           </div>
         </div>
       </div>

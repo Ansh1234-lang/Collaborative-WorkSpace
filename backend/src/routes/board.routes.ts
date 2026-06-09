@@ -75,7 +75,7 @@ async function reorderCards(
 boardRouter.post('/columns/:columnId/cards', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const columnId = req.params.columnId as string
-    const { title, priority } = req.body
+    const { title, description, priority } = req.body
 
     const lastCard = await prisma.card.findFirst({
       where: { columnId },
@@ -86,6 +86,7 @@ boardRouter.post('/columns/:columnId/cards', async (req: AuthRequest, res: Respo
     const card = await prisma.card.create({
       data: {
         title,
+        description,
         priority: (priority as Priority) || Priority.MEDIUM,
         columnId,
         creatorId: req.userId!,

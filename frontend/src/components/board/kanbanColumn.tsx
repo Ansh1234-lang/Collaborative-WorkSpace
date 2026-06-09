@@ -7,6 +7,8 @@ import { Column } from '@/src/store/workspace.store'
 import { useWorkspaceStore } from '@/src/store/workspace.store' 
 import CardItem from './card/CardItem'
 import api from '@/src/lib/api'
+import { Sparkles } from 'lucide-react'
+import { useAiStore } from '@/src/store/ai.store'
 
 interface KanbanColumnProps {
   column: Column
@@ -22,9 +24,12 @@ const PRIORITY_COLORS = {
 
 export function KanbanColumn({ column, workspaceId }: KanbanColumnProps) {
   const { addCard } = useWorkspaceStore()
+  const { generateTaskBreakdown } = useAiStore()
   const [addingCard, setAddingCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState('')
+  const [breakdownSteps, setBreakdownSteps] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
+  const [generatingBreakdown, setGeneratingBreakdown] = useState(false)
 
   // useDroppable makes this column a drop target
   const { setNodeRef, isOver } = useDroppable({
@@ -38,14 +43,35 @@ export function KanbanColumn({ column, workspaceId }: KanbanColumnProps) {
     setCreating(true)
 
     try {
+      const description = breakdownSteps.length
+        ? [
+            'AI Task Breakdown',
+            ...breakdownSteps.map((step, index) => `${index + 1}. ${step}`),
+          ].join('\n')
+        : undefined
+
       const { data } = await api.post(`/boards/columns/${column.id}/cards`, {
         title: newCardTitle.trim(),
+        description,
       })
       addCard(data.card)
       setNewCardTitle('')
+      setBreakdownSteps([])
       setAddingCard(false)
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function handleGenerateBreakdown() {
+    if (!newCardTitle.trim()) return
+
+    try {
+      setGeneratingBreakdown(true)
+      const steps = await generateTaskBreakdown(workspaceId, newCardTitle.trim())
+      setBreakdownSteps(steps)
+    } finally {
+      setGeneratingBreakdown(false)
     }
   }
 
@@ -83,7 +109,10 @@ export function KanbanColumn({ column, workspaceId }: KanbanColumnProps) {
             <textarea
               autoFocus
               value={newCardTitle}
-              onChange={(e) => setNewCardTitle(e.target.value)}
+              onChange={(e) => {
+                setNewCardTitle(e.target.value)
+                setBreakdownSteps([])
+              }}
               placeholder="Card title"
               rows={2}
               className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none"
@@ -95,7 +124,23 @@ export function KanbanColumn({ column, workspaceId }: KanbanColumnProps) {
                 if (e.key === 'Escape') setAddingCard(false)
               }}
             />
+            {breakdownSteps.length > 0 && (
+              <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-gray-600">
+                {breakdownSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
             <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleGenerateBreakdown}
+                disabled={!newCardTitle.trim() || generatingBreakdown}
+                title="Generate AI Breakdown"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                <Sparkles size={14} />
+              </button>
               <button
                 type="submit"
                 disabled={creating}
@@ -105,7 +150,11 @@ export function KanbanColumn({ column, workspaceId }: KanbanColumnProps) {
               </button>
               <button
                 type="button"
-                onClick={() => { setAddingCard(false); setNewCardTitle('') }}
+                onClick={() => {
+                  setAddingCard(false)
+                  setNewCardTitle('')
+                  setBreakdownSteps([])
+                }}
                 className="text-gray-400 text-xs px-2 py-1.5 hover:text-gray-600"
               >
                 Cancel

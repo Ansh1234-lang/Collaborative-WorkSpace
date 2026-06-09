@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import api from '@/src/lib/api'
 import { Card, useWorkspaceStore } from '@/src/store/workspace.store'
 import { WorkspaceMember } from '@/src/store/workspace.store'
+import { useAiStore } from '@/src/store/ai.store'
+import { Sparkles } from 'lucide-react'
 
 interface CardModalProps {
   card: Card
@@ -18,7 +20,8 @@ export default function CardModal({
   isOpen,
   onClose,
 }: CardModalProps) {
-  const { updateCard, deleteCard } = useWorkspaceStore()
+  const { updateCard, deleteCard, currentWorkspace } = useWorkspaceStore()
+  const { generateCardDescription } = useAiStore()
 
   const [assigneeId, setAssigneeId] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -29,6 +32,7 @@ export default function CardModal({
   >('MEDIUM')
 
   const [saving, setSaving] = useState(false)
+  const [generatingDescription, setGeneratingDescription] = useState(false)
 
   useEffect(() => {
     if (!card) return
@@ -87,6 +91,22 @@ export default function CardModal({
     }
   }
 
+  async function handleGenerateDescription() {
+    if (!currentWorkspace?.id || !title.trim()) return
+
+    try {
+      setGeneratingDescription(true)
+      const generated = await generateCardDescription(
+        currentWorkspace.id,
+        title.trim()
+      )
+      setDescription(generated.formattedDescription)
+      setPriority(generated.estimatedComplexity)
+    } finally {
+      setGeneratingDescription(false)
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -129,9 +149,21 @@ export default function CardModal({
 
           {/* Description */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Description
-            </label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Description
+              </label>
+
+              <button
+                type="button"
+                onClick={handleGenerateDescription}
+                disabled={!title.trim() || generatingDescription}
+                title="Generate AI Description"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                <Sparkles size={16} />
+              </button>
+            </div>
 
             <textarea
               rows={5}
